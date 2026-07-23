@@ -81,3 +81,36 @@ func ConfigureUser(name, email string) bool {
 	_, err2 := Command("config", "--global", "user.email", email)
 	return err1 == nil && err2 == nil
 }
+
+// Init initializes a new git repository with the specified default branch.
+func Init(defaultBranch string) bool {
+	if defaultBranch == "" {
+		defaultBranch = "main"
+	}
+	_, err := Command("init", "-b", defaultBranch)
+	if err != nil {
+		// Fallback for older git versions that don't support `git init -b`
+		_, errInit := Command("init")
+		if errInit != nil {
+			return false
+		}
+		_, _ = Command("branch", "-M", defaultBranch)
+	}
+	return true
+}
+
+// HasCommits checks if the repository contains at least one commit.
+func HasCommits() bool {
+	_, err := Command("rev-parse", "--verify", "HEAD")
+	return err == nil
+}
+
+// RenameBranch renames the current active branch.
+func RenameBranch(newBranch string) bool {
+	if newBranch == "" {
+		return false
+	}
+	_, err := Command("branch", "-M", newBranch)
+	return err == nil
+}
+

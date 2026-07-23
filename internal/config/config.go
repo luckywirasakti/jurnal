@@ -11,6 +11,7 @@ type Schema struct {
 	OpenAIBaseURL string `json:"openai_base_url"`
 	OpenAIAPIKey  string `json:"openai_api_key"`
 	OpenAIModel   string `json:"openai_model"`
+	DefaultBranch string `json:"default_branch,omitempty"`
 }
 
 func getPath() (string, error) {
@@ -29,41 +30,36 @@ func Load() (Schema, error) {
 	cfg.OpenAIBaseURL = os.Getenv("OPENAI_BASE_URL")
 	cfg.OpenAIAPIKey = os.Getenv("OPENAI_API_KEY")
 	cfg.OpenAIModel = os.Getenv("OPENAI_MODEL")
+	cfg.DefaultBranch = os.Getenv("JURNAL_DEFAULT_BRANCH")
 
-	if cfg.OpenAIBaseURL != "" && cfg.OpenAIAPIKey != "" {
-		if cfg.OpenAIModel == "" {
-			cfg.OpenAIModel = "gpt-4o-mini"
+	if cfg.OpenAIBaseURL == "" || cfg.OpenAIAPIKey == "" {
+		if path, err := getPath(); err == nil {
+			if file, err := os.ReadFile(path); err == nil {
+				_ = json.Unmarshal(file, &cfg)
+			}
 		}
-		return cfg, nil
 	}
 
-	path, err := getPath()
-	if err != nil {
-		return cfg, err
+	if cfg.OpenAIModel == "" {
+		cfg.OpenAIModel = "gpt-4o-mini"
 	}
-
-	file, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return cfg, nil
-		}
-		return cfg, err
-	}
-
-	err = json.Unmarshal(file, &cfg)
-	if err != nil {
-		return cfg, err
+	if cfg.DefaultBranch == "" {
+		cfg.DefaultBranch = "main"
 	}
 
 	return cfg, nil
 }
 
 // Save writes configuration securely to the local store.
-func Save(baseURL, apiKey, model string) error {
+func Save(baseURL, apiKey, model, defaultBranch string) error {
+	if defaultBranch == "" {
+		defaultBranch = "main"
+	}
 	cfg := Schema{
 		OpenAIBaseURL: baseURL,
 		OpenAIAPIKey:  apiKey,
 		OpenAIModel:   model,
+		DefaultBranch: defaultBranch,
 	}
 
 	path, err := getPath()

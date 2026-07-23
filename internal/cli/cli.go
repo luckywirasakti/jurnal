@@ -28,14 +28,46 @@ func PrintUsage() {
 	fmt.Println("\nUsage:")
 	fmt.Println("  jurnal <command>")
 	fmt.Println("\nCommands:")
-	fmt.Println("  setup    Configure Jurnal API and Git settings")
-	fmt.Println("  stage    Plan and commit changes step-by-step")
-	fmt.Println("  -v       Show version credits")
+	fmt.Println("  setup            Configure Jurnal API credentials and default branch")
+	fmt.Println("  setup --global   Configure global Git user credentials (user.name & user.email)")
+	fmt.Println("  init             Initialize Git repo, default branch, and starter files")
+	fmt.Println("  stage            Plan and commit changes step-by-step")
+	fmt.Println("  -v               Show version credits")
 }
 
 // HandleSetup configures credentials and settings interactively.
-func HandleSetup() {
+func HandleSetup(args []string) {
 	reader := bufio.NewReader(os.Stdin)
+
+	isGlobal := false
+	for _, arg := range args {
+		if arg == "--global" || arg == "--git" {
+			isGlobal = true
+			break
+		}
+	}
+
+	if isGlobal {
+		fmt.Println("\n--- Configuring Global Git User Credentials ---")
+		fmt.Print("Git Global User Name: ")
+		gitName, _ := reader.ReadString('\n')
+		gitName = strings.TrimSpace(gitName)
+
+		fmt.Print("Git Global User Email: ")
+		gitEmail, _ := reader.ReadString('\n')
+		gitEmail = strings.TrimSpace(gitEmail)
+
+		if gitName != "" && gitEmail != "" {
+			if git.ConfigureUser(gitName, gitEmail) {
+				fmt.Println("✔ Git global user credentials set successfully")
+			} else {
+				fmt.Println("✖ Failed to set Git global configuration")
+			}
+		} else {
+			fmt.Println("⚠ Git configuration skipped (name or email empty)")
+		}
+		return
+	}
 
 	fmt.Println("\n--- Configuring Jurnal Local Settings ---")
 
@@ -54,30 +86,20 @@ func HandleSetup() {
 		model = "gpt-4o-mini"
 	}
 
-	fmt.Print("Git Global User Name: ")
-	gitName, _ := reader.ReadString('\n')
-	gitName = strings.TrimSpace(gitName)
+	fmt.Print("Default Git Branch (default: main): ")
+	defaultBranch, _ := reader.ReadString('\n')
+	defaultBranch = strings.TrimSpace(defaultBranch)
+	if defaultBranch == "" {
+		defaultBranch = "main"
+	}
 
-	fmt.Print("Git Global User Email: ")
-	gitEmail, _ := reader.ReadString('\n')
-	gitEmail = strings.TrimSpace(gitEmail)
-
-	err := config.Save(url, key, model)
+	err := config.Save(url, key, model, defaultBranch)
 	if err != nil {
 		fmt.Printf("Error saving config: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Println("✔ Credentials saved to ~/.jurnal.json")
-
-	if gitName != "" && gitEmail != "" {
-		if git.ConfigureUser(gitName, gitEmail) {
-			fmt.Println("✔ Git global configuration set successfully")
-		} else {
-			fmt.Println("✖ Failed to set Git global configuration")
-		}
-	} else {
-		fmt.Println("⚠ Git configurations skipped (name/email empty)")
-	}
+	fmt.Println("Tip: Run 'jurnal setup --global' if you also want to configure global Git user credentials.")
 }
 
 // HandleStage coordinates branch generation and logical batch committing.
@@ -133,15 +155,21 @@ func HandleStage() {
 	// Branch switch confirmation
 	currentBranch := git.GetCurrentBranch()
 	if plan.ProposedBranch != "" && plan.ProposedBranch != currentBranch {
-		fmt.Printf("Create and switch to new branch '%s'? [Y/n]: ", plan.ProposedBranch)
+		fmt.Println("Branch Action:")
+		fmt.Printf("  [1] Switch to proposed branch ('%s') [Default]\n", plan.ProposedBranch)
+		fmt.Printf("  [2] Stay on current branch ('%s')\n", currentBranch)
+		fmt.Print("Choice [1/2]: ")
+
 		ans, _ := reader.ReadString('\n')
 		ans = strings.ToLower(strings.TrimSpace(ans))
-		if ans == "" || ans == "y" || ans == "yes" {
+		if ans == "" || ans == "1" || ans == "y" || ans == "yes" {
 			if git.Checkout(plan.ProposedBranch) {
 				fmt.Printf("✔ Switched to branch '%s'\n", plan.ProposedBranch)
 			} else {
-				fmt.Println("✖ Failed to switch branch. Continuing on current branch.")
+				fmt.Printf("✖ Failed to switch branch. Continuing on current branch '%s'.\n", currentBranch)
 			}
+		} else {
+			fmt.Printf("ℹ Continuing commits on current branch '%s'\n", currentBranch)
 		}
 	}
 
@@ -174,3 +202,132 @@ func HandleStage() {
 	}
 	fmt.Println("\n✔ Done! All actions processed.")
 }
+
+// HandleInit initializes a git repository, sets default branch, and generates starter files.
+func HandleInit(args []string) {
+	reader := bufio.NewReader(os.Stdin)
+
+	cfg, _ := config.Load()
+	configuredBranch := cfg.DefaultBranch
+	if configuredBranch == "" {
+		configuredBranch = "main"
+	}
+
+	defaultBranch := configuredBranch
+	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
+		defaultBranch = strings.TrimSpace(args[0])
+	} else {
+		fmt.Printf("Default branch name [%s]: ", configuredBranch)
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+		if input != "" {
+			defaultBranch = input
+		}
+	}
+
+	if !git.IsRepository() {
+		fmt.Printf("Initializing new Git repository on branch '%s'... ", defaultBranch)
+		if git.Init(defaultBranch) {
+			fmt.Println("Done.\n✔ Git repository initialized successfully.")
+		} else {
+			fmt.Println("\n✖ Failed to initialize Git repository.")
+			os.Exit(1)
+		}
+	} else {
+		currentBranch := git.GetCurrentBranch()
+		if currentBranch != defaultBranch && !git.HasCommits() {
+			fmt.Printf("Renaming branch '%s' -> '%s'... ", currentBranch, defaultBranch)
+			if git.RenameBranch(defaultBranch) {
+				fmt.Println("Done.")
+			} else {
+				fmt.Println("\n⚠ Failed to rename branch.")
+			}
+		}
+		fmt.Printf("✔ Active Git repository detected on branch '%s'.\n", git.GetCurrentBranch())
+	}
+
+	// Helper function to check file existence
+	fileExists := func(path string) bool {
+		_, err := os.Stat(path)
+		return err == nil
+	}
+
+	// Check and create .gitignore
+	if !fileExists(".gitignore") {
+		fmt.Print("Create default .gitignore? [Y/n]: ")
+		ans, _ := reader.ReadString('\n')
+		ans = strings.ToLower(strings.TrimSpace(ans))
+		if ans == "" || ans == "y" || ans == "yes" {
+			gitignoreContent := `# Binaries & Executables
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs & Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs & Environment
+*.log
+.env
+.env.local
+`
+			err := os.WriteFile(".gitignore", []byte(gitignoreContent), 0644)
+			if err == nil {
+				fmt.Println("✔ Created .gitignore")
+			} else {
+				fmt.Printf("✖ Failed to create .gitignore: %v\n", err)
+			}
+		}
+	}
+
+	// Check and create README.md
+	if !fileExists("README.md") {
+		fmt.Print("Create starter README.md? [Y/n]: ")
+		ans, _ := reader.ReadString('\n')
+		ans = strings.ToLower(strings.TrimSpace(ans))
+		if ans == "" || ans == "y" || ans == "yes" {
+			dirName := "Project"
+			if cwd, err := os.Getwd(); err == nil {
+				parts := strings.Split(cwd, string(os.PathSeparator))
+				if len(parts) > 0 && parts[len(parts)-1] != "" {
+					dirName = parts[len(parts)-1]
+				}
+			}
+			readmeContent := fmt.Sprintf("# %s\n\nInitial repository setup with Jurnal CLI.\n", dirName)
+			err := os.WriteFile("README.md", []byte(readmeContent), 0644)
+			if err == nil {
+				fmt.Println("✔ Created README.md")
+			} else {
+				fmt.Printf("✖ Failed to create README.md: %v\n", err)
+			}
+		}
+	}
+
+	// Option to run stage immediately
+	fmt.Print("\nRun 'jurnal stage' now to plan initial commits? [Y/n]: ")
+	ans, _ := reader.ReadString('\n')
+	ans = strings.ToLower(strings.TrimSpace(ans))
+	if ans == "" || ans == "y" || ans == "yes" {
+		fmt.Println()
+		HandleStage()
+	} else {
+		fmt.Println("\n✔ Initialization complete! Run 'jurnal stage' whenever you're ready to commit.")
+	}
+}
+
