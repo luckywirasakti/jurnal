@@ -11,11 +11,12 @@ import (
 const version = "1.0.0"
 
 func main() {
-	versionFlag := flag.Bool("v", false, "Show version and credits")
-	versionLongFlag := flag.Bool("version", false, "Show version and credits")
+	var versionFlag bool
+	flag.BoolVar(&versionFlag, "v", false, "Show version and credits")
+	flag.BoolVar(&versionFlag, "version", false, "Show version and credits")
 	flag.Parse()
 
-	if *versionFlag || *versionLongFlag {
+	if versionFlag {
 		cli.PrintCredits(version)
 		return
 	}
@@ -27,8 +28,10 @@ func main() {
 	}
 
 	switch args[0] {
+	case "init":
+		cli.HandleInit(args[1:])
 	case "setup":
-		cli.HandleSetup()
+		cli.HandleSetup(args[1:])
 	case "stage":
 		cli.HandleStage()
 	default:

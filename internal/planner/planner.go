@@ -142,15 +142,12 @@ JSON Output Schema:
 		return nil, err
 	}
 
-	cleaned := strings.TrimSpace(rawPlan)
-	if strings.HasPrefix(cleaned, "```json") {
-		cleaned = strings.TrimPrefix(cleaned, "```json")
-		cleaned = strings.TrimSuffix(cleaned, "```")
-	} else if strings.HasPrefix(cleaned, "```") {
-		cleaned = strings.TrimPrefix(cleaned, "```")
-		cleaned = strings.TrimSuffix(cleaned, "```")
+	start := strings.Index(rawPlan, "{")
+	end := strings.LastIndex(rawPlan, "}")
+	if start == -1 || end == -1 || start >= end {
+		return nil, fmt.Errorf("no valid JSON object found in response: %s", rawPlan)
 	}
-	cleaned = strings.TrimSpace(cleaned)
+	cleaned := rawPlan[start : end+1]
 
 	var plan StagingPlan
 	err = json.Unmarshal([]byte(cleaned), &plan)
