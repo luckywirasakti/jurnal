@@ -12,6 +12,7 @@ Written entirely in native Go, Jurnal compiles into a single static binary with 
 
 ## Features
 
+- **Repository Initialization (`jurnal init`):** Automatically initializes Git repositories, configures default branch (e.g., `main`), generates starter `.gitignore` / `README.md`, and seamlessly triggers initial staging.
 - **Semantic Commit Grouping:** Automatically batches related modifications (e.g., separating migrations, logic, and tests) into clean commits.
 - **Interactive Staging & Commit Flow:** Switch to proposed branch names and apply staging batches sequentially with terminal prompts.
 - **Zero Runtime Overhead:** Pre-compiled native binaries for macOS, Linux, and Windows. No Python interpreter, PyInstaller unpack delays, or node runtime required.
@@ -62,7 +63,8 @@ This will prompt you for your API credentials and Git settings, saving them to `
 {
     "openai_base_url": "https://api.openai.com/v1",
     "openai_api_key": "your-api-key",
-    "openai_model": "gpt-4o-mini"
+    "openai_model": "gpt-4o-mini",
+    "default_branch": "main"
 }
 ```
 
@@ -72,24 +74,34 @@ Environment variables take precedence over the local JSON configuration file if 
 export OPENAI_BASE_URL="https://api.your-provider.com/v1"
 export OPENAI_API_KEY="your-api-key"
 export OPENAI_MODEL="gpt-4o-mini"
+export JURNAL_DEFAULT_BRANCH="main"
 ```
 
 ---
 
 ## Usage
 
-### 1. `jurnal stage`
-Analyze modifications in your current repository workspace, generate proposed branch naming structures, and interactively staging and committing in modular batches.
+### 1. `jurnal setup`
+Set up or override local JSON credentials and default branch settings (`~/.jurnal.json`). To configure global Git credentials (`user.name` and `user.email`), pass the `--global` flag.
+
+```bash
+jurnal setup          # Configure API credentials & default branch
+jurnal setup --global # Configure global Git user name & email
+```
+
+### 2. `jurnal init [branch]`
+Initialize a new Git repository (or check an existing repository), set the default branch (e.g. `main`), generate starter files (`.gitignore`, `README.md`), and optionally trigger `jurnal stage` for the initial commit.
+
+```bash
+jurnal init        # Defaults to branch 'main'
+jurnal init main   # Explicitly set main branch
+```
+
+### 3. `jurnal stage`
+Analyze modifications in your current repository workspace, generate proposed branch naming structures, and interactively stage and commit in modular batches.
 
 ```bash
 jurnal stage
-```
-
-### 2. `jurnal setup`
-Set up or override local JSON credentials and global git settings.
-
-```bash
-jurnal setup
 ```
 
 ---
